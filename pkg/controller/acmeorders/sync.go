@@ -608,6 +608,19 @@ func (c *controller) finalizeOrder(ctx context.Context, cl acmecl.Interface, o *
 			return c.syncCertificateDataWithOrder(ctx, cl, *acmeOrder, o, issuer)
 		}
 
+		// Some ACME servers (e.g. ZeroSSL) return 403 orderNotReady on the first
+		// finalize call and immediately transition the order to 'processing' state.
+		// When this happens, re-queue so the main sync loop can poll until valid.
+		if acmeOrder.Status == acmeapi.StatusProcessing {
+			log.V(logf.InfoLevel).Info("Order transitioned to processing state after 403 orderNotReady, re-queuing to poll for completion")
+			c.setOrderState(&o.Status, string(cmacme.Processing))
+			c.scheduledWorkQueue.Add(types.NamespacedName{
+				Name:      o.Name,
+				Namespace: o.Namespace,
+			}, RequeuePeriod)
+			return nil
+		}
+
 	}
 
 	// Any other ACME 4xx error means that the Order can be considered failed.
