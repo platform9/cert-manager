@@ -55,9 +55,11 @@ const (
 )
 
 var (
-	// RequeuePeriod is the default period after which an Order should be re-queued.
+	// RequeuePeriod is the default period after which an Order should be re-queued
+	// when in processing state. Set to 15 seconds to match ZeroSSL's Retry-After: 15
+	// response header; this is also a reasonable default for other ACME servers.
 	// It can be overridden in tests.
-	RequeuePeriod = time.Second * 5
+	RequeuePeriod = time.Second * 15
 )
 
 func (c *controller) Sync(ctx context.Context, o *cmacme.Order) (err error) {
