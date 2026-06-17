@@ -13,5 +13,5 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 # Runtime stage — matches upstream cert-manager base image
 FROM gcr.io/distroless/static-debian12@sha256:5074667eecabac8ac5c5d395100a153a7b4e8426181cca36181cd019530f00c8
 COPY --from=builder /controller /controller
-USER nonroot:nonroot
+USER 65532:65532
 ENTRYPOINT ["/controller"]
