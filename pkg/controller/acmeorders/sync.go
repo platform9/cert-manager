@@ -551,6 +551,13 @@ func (c *controller) listOwnedChallenges(o *cmacme.Order) ([]*cmacme.Challenge, 
 }
 
 func (c *controller) finalizeOrder(ctx context.Context, cl acmecl.Interface, o *cmacme.Order, issuer cmapi.GenericIssuer) error {
+	// ZeroSSL can hang ACME HTTP connections indefinitely; cap the total time for
+	// all calls within this function (finalize POST + order status GET) so the
+	// controller goroutine can escape and re-queue on the next reconcile.
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+
 	log := logf.FromContext(ctx)
 
 	// Due to a bug in the initial release of this controller, we previously
