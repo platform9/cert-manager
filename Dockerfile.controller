@@ -1,0 +1,17 @@
+# Build stage — builds from cmd/controller/ which has a replace directive
+# pointing to ../../ (the root module containing the patched sync.go)
+FROM golang:1.25 AS builder
+WORKDIR /workspace
+COPY . .
+WORKDIR /workspace/cmd/controller
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build \
+    -ldflags="-s -w -X github.com/cert-manager/cert-manager/pkg/util.AppVersion=v1.20.2-pf9.1" \
+    -o /controller \
+    .
+
+# Runtime stage — matches upstream cert-manager base image
+FROM gcr.io/distroless/static-debian12@sha256:5074667eecabac8ac5c5d395100a153a7b4e8426181cca36181cd019530f00c8
+COPY --from=builder /controller /controller
+USER nonroot:nonroot
+ENTRYPOINT ["/controller"]
