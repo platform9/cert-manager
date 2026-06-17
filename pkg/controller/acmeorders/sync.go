@@ -246,13 +246,22 @@ func (c *controller) Sync(ctx context.Context, o *cmacme.Order) (err error) {
 	// valid or invalid.
 	//
 	// ZeroSSL exhibits non-standard ACME behavior: it returns 403 orderNotReady on the first finalize
-	// call and transitions the order to 'processing', but the order never self-transitions to 'valid'.
-	// A second finalize POST is required to trigger actual certificate issuance. We attempt re-finalization
-	// here; if ZeroSSL is not ready, it will return 403 again and the order cycles back to this case.
+	// call (even when the order is in 'ready' state), but internally accepts the finalization and
+	// transitions the order to 'processing'. The finalizeOrder 403 handler (below) detects this and
+	// sets the local order state to Processing. Subsequent attempts to re-POST to the finalize URL are
+	// rejected with 403 since the order is already being processed. The correct behavior is to poll
+	// until ZeroSSL transitions the order to 'valid' and a certificate URL is available.
 	case acmeOrder.Status == acmeapi.StatusProcessing:
-		log.V(logf.InfoLevel).Info("Order is in processing state, re-attempting finalization to handle servers that require a second finalize call")
+		log.V(logf.InfoLevel).Info("Order is in processing state, waiting for ACME server to update the status of the order...")
 		c.setOrderState(&o.Status, string(cmacme.Processing))
-		return c.finalizeOrder(ctx, cl, o, genericIssuer)
+
+		// Re-queue the Order to be processed again after RequeuePeriod has passed.
+		c.scheduledWorkQueue.Add(types.NamespacedName{
+			Name:      o.Name,
+			Namespace: o.Namespace,
+		}, RequeuePeriod)
+
+		return nil
 
 	case !anyChallengesFailed(challenges) && allChallengesFinal(challenges):
 		log.V(logf.DebugLevel).Info("All challenges are in a final state, updating order state")
